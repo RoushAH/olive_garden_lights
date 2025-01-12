@@ -29,7 +29,9 @@ settings = [
     Setting("Password", str),
     Setting("Latitude", float, 90, -90),
     Setting("Longitude", float, 180, -180),
-    Setting("Light_Sensitivity", int, 100, 0)
+    Setting("Light_Sensitivity", int, 100, 0),
+    Setting("Relay_Pin", int, 40, 0),
+    Setting("Mode", str),
 ]
 
 for setting in settings:
