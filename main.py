@@ -6,6 +6,13 @@ from machine import ADC, Pin, Timer
 
 from relay import Relay
 
+HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods':'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers':'Content-Type',
+    'Content-Type':'text/html'
+}
+
 # Read the config
 settings = json.load(open('config.json'))
 
@@ -25,7 +32,7 @@ def arm(armed_state=None):
 @server.route("/lights_on")
 def lights_on(request):
     lights.turn_on()
-    return "", 200
+    return "", 200, HEADERS
 
 
 @server.route("/lights_off")
@@ -33,19 +40,19 @@ def lights_off(request):
     lights.turn_off()
     global rearm_timer
     rearm_timer = Timer(period=12 * 60 * 60, mode=Timer.ONE_SHOT, callback=arm)
-    return "", 200
+    return "", 200, HEADERS
 
 
 @server.route("/ruok")
 def ruok(request):
-    return f"{lights.on}", 200
+    return f"{lights.on}", 200, HEADERS
 
 
 @server.route("/status")
 def status(request):
     out = settings.copy()
     out["Lights"] = lights.on
-    return json.dumps(out), 200
+    return json.dumps(out), 200, HEADERS
 
 
 @server.route("/settings_update", methods=["POST", "GET"])
@@ -59,23 +66,23 @@ def settings_update(request):
 @server.route("/arm")
 def arm_sensor(request):
     arm(True)
-    return "", 200
+    return "", 200, HEADERS
 
 
 @server.route("/disarm")
 def disarm_sensor(request):
     arm(False)
-    return "", 200
+    return "", 200, HEADERS
 
 
 @server.route("/")
 def index(request):
-    return "<h1>Hello, World!</h1>", 200
+    return "<h1>Hello, World!</h1>", 200, HEADERS
 
 
 @server.catchall()
 def catchall(request):
-    return f"You've found the server!", 200
+    return f"You've found the server!", 200, HEADERS
 
 
 async def go_serve():
