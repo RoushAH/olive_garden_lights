@@ -32,7 +32,7 @@ def lights_on(request):
 def lights_off(request):
     lights.turn_off()
     global rearm_timer
-    rearm_timer  = Timer(period=12*60*60, mode=Timer.ONE_SHOT, callback=arm)
+    rearm_timer = Timer(period=12 * 60 * 60, mode=Timer.ONE_SHOT, callback=arm)
     return "", 200
 
 
@@ -46,6 +46,7 @@ def status(request):
     out = settings.copy()
     out["Lights"] = lights.on
     return json.dumps(out), 200
+
 
 @server.route("/settings_update", methods=["POST", "GET"])
 def settings_update(request):
