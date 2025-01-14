@@ -8,13 +8,14 @@ from relay import Relay
 
 HEADERS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods':'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers':'Content-Type',
-    'Content-Type':'text/html'
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'text/html'
 }
 
 # Read the config
 settings = json.load(open('config.json'))
+armed = False
 
 # We need to create a lights object,
 # so we can control it
@@ -23,66 +24,68 @@ rearm_timer = None
 
 
 def arm(armed_state=None):
-    armed_state = armed_state or settings["Armed"]
-    settings["Armed"] = armed_state
-    with open('config.json', 'w') as f:
-        json.dump(settings, f)
+    global armed
+    armed = armed_state or settings["Armed"]
 
 
 @server.route("/lights_on")
-def lights_on(request):
+def lights_on(request=None):
     lights.turn_on()
-    return "", 200, HEADERS
+
+    response = server.Response(body=str(lights.on), status=200, headers=HEADERS)
+    return response
 
 
 @server.route("/lights_off")
-def lights_off(request):
+def lights_off(request=None):
+    global armed, rearm_timer
+
     lights.turn_off()
-    global rearm_timer
+    armed = False
     rearm_timer = Timer(period=12 * 60 * 60, mode=Timer.ONE_SHOT, callback=arm)
-    return "", 200, HEADERS
+
+    response = server.Response(body=str(lights.on), status=200, headers=HEADERS)
+    return response
 
 
 @server.route("/ruok")
 def ruok(request):
-    return f"{lights.on}", 200, HEADERS
+    response = server.Response(body=str(lights.on), status=200, headers=HEADERS)
+    return response
 
 
 @server.route("/status")
 def status(request):
     out = settings.copy()
     out["Lights"] = lights.on
-    return json.dumps(out), 200, HEADERS
+
+    response = server.Response(body=json.dumps(out), status=200, headers=HEADERS)
+    return response
 
 
 @server.route("/settings_update", methods=["POST", "GET"])
 def settings_update(request):
+    global settings
     settings = request.data
-    print(settings)
-    # with open('config.json', 'w') as f:
-    #     json.dump(settings, f)
 
+    if "Lights" in settings:
+        lights.set_state(settings.pop("Lights"))
 
-@server.route("/arm")
-def arm_sensor(request):
-    arm(True)
-    return "", 200, HEADERS
-
-
-@server.route("/disarm")
-def disarm_sensor(request):
-    arm(False)
-    return "", 200, HEADERS
+    with open('config.json', 'w') as f:
+        json.dump(settings, f)
+    return status(request)
 
 
 @server.route("/")
 def index(request):
-    return "<h1>Hello, World!</h1>", 200, HEADERS
+    response = server.Response(body="<h1>Hello, World!</h1>", status=200, headers=HEADERS)
+    return response
 
 
 @server.catchall()
 def catchall(request):
-    return f"You've found the server!", 200, HEADERS
+    response = server.Response(body="You've found the server!", status=404, headers=HEADERS)
+    return response
 
 
 async def go_serve():
@@ -93,7 +96,7 @@ async def monitor():
     sensor = ADC(Pin(settings["Sensor_Pin"]))
     while True:
         # do thing
-        if settings["Armed"]:
+        if armed:
             current_light = sensor.read_u16()
             if current_light < settings["Light_Sense_Cutoff"] and lights.on:
                 lights.turn_off()
@@ -102,11 +105,22 @@ async def monitor():
         time.sleep_ms(500)
 
 
+async def debug_control():
+    while True:
+        if input("On?") == "y":
+            lights.turn_on()
+        else:
+            lights.turn_off()
+        time.sleep_ms(1500)
+
+
 async def main():
     """ Set up both the server and the light level monitor"""
     uasyncio.create_task(go_serve())
     if settings["Sensor_Pin"] > 0:
         uasyncio.create_task(monitor())
+    else:
+        uasyncio.create_task(debug_control())
 
     await uasyncio.sleep(10)
 
@@ -117,4 +131,5 @@ if __name__ == "__main__":
     print(ip)
 
     time.sleep(2)
-    server.run(host="0.0.0.0", port=80)
+    uasyncio.run(main())
+    # server.run(host="0.0.0.0", port=80)

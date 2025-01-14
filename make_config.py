@@ -29,7 +29,7 @@ settings = [
     Setting("Password", str),
     Setting("Latitude", float, 90, -90),
     Setting("Longitude", float, 180, -180),
-    Setting("Light_Sense_Cutoff", int, 65535, 0),
+    Setting("Light_Sensitivity", int, 65535, 0),
     Setting("Relay_Pin", int, 40, 0),
     Setting("Relay_Mode", str),
     Setting("Sensor_Pin", int, 40, 0),
@@ -42,6 +42,7 @@ for setting in settings:
         val = input(f"Enter value for {setting.name}: ")
 
 setting_vals = {x.name:x.value for x in settings}
+setting_vals["Lights"] = False
 print(json.dumps(setting_vals, indent=3))
 with open("config.json", "w") as f:
     json.dump(setting_vals, f, indent=3)
