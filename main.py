@@ -15,12 +15,19 @@ HEADERS = {
 
 # Read the config
 settings = json.load(open('config.json'))
-armed = False
+armed = True
 
 # We need to create a lights object,
 # so we can control it
 lights = Relay(pin=settings["Relay_Pin"], mode=settings["Relay_Mode"])
 rearm_timer = None
+
+
+def average_light(values):
+    if len(values) < settings["Sense_Count"]:
+        return int(sum(values) / len(values))
+    values = values[-settings["Sense_Count"]:]
+    return int(sum(values) / settings["Sense_Count"])
 
 
 def arm(armed_state=None):
@@ -94,14 +101,24 @@ async def go_serve():
 
 async def monitor():
     sensor = ADC(Pin(settings["Sensor_Pin"]))
+    reads = []
+    print(sensor, reads)
+    cooldown = 0 # Prevent flickering when crossing the boundary of on to off
+    fudge_factor = 1 + 0.01 * cooldown # To also smooth the curve
     while True:
         # do thing
         if armed:
-            current_light = sensor.read_u16()
-            if current_light < settings["Light_Sense_Cutoff"] and lights.on:
+            reads.append(sensor.read_u16())
+            current_light = average_light(reads)
+            if cooldown > 0:
+                cooldown -= 1
+            print(current_light)
+            if current_light < settings["Light_Sensitivity"] and lights.on and cooldown == 0:
                 lights.turn_off()
-            elif current_light > settings["Light_Sense_Cutoff"] and not lights.on:
+                cooldown = settings["Cooldown"]
+            elif current_light > settings["Light_Sensitivity"] + fudge_factor and not lights.on and cooldown == 0:
                 lights.turn_on()
+                cooldown = settings["Cooldown"]
         time.sleep_ms(500)
 
 
@@ -116,7 +133,7 @@ async def debug_control():
 
 async def main():
     """ Set up both the server and the light level monitor"""
-    uasyncio.create_task(go_serve())
+    # uasyncio.create_task(go_serve())
     if settings["Sensor_Pin"] > 0:
         uasyncio.create_task(monitor())
     else:
@@ -126,9 +143,9 @@ async def main():
 
 
 if __name__ == "__main__":
-    ip = connect_to_wifi(settings["SSID"], settings["Password"])
-
-    print(ip)
+#     ip = connect_to_wifi(settings["SSID"], settings["Password"])
+# 
+#     print(ip)
 
     time.sleep(2)
     uasyncio.run(main())

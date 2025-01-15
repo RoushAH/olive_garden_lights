@@ -34,6 +34,8 @@ settings = [
     Setting("Relay_Mode", str),
     Setting("Sensor_Pin", int, 40, 0),
     Setting("Armed", bool),
+    Setting("Sense_Count", int, 100, 0),
+    Setting("Cooldown", int, 100, 0),
 ]
 
 for setting in settings:
