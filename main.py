@@ -32,7 +32,7 @@ def average_light(values):
 
 def arm(armed_state=None):
     global armed
-    armed = armed_state or settings["Armed"]
+    armed = armed_state or True
 
 
 @server.route("/lights_on")
@@ -43,13 +43,15 @@ def lights_on(request=None):
     return response
 
 
-@server.route("/lights_off")
-def lights_off(request=None):
+@server.route("/lights_off/<timer>")
+def lights_off(request=None, timer=None):
     global armed, rearm_timer
 
     lights.turn_off()
     armed = False
-    rearm_timer = Timer(period=12 * 60 * 60, mode=Timer.ONE_SHOT, callback=arm)
+    timer = int(timer) or 0
+    if timer > 0:
+        rearm_timer = Timer(period=timer, mode=Timer.ONE_SHOT, callback=arm)
 
     response = server.Response(body=str(lights.on), status=200, headers=HEADERS)
     return response
