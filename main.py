@@ -9,18 +9,19 @@ from relay import Relay
 HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, contenttype',
     'Content-Type': 'text/html'
 }
 
 # Read the config
 settings = json.load(open('config.json'))
+
 armed = True
+attempt_rearm = None  # timer to track how many seconds of 'daylight' to rearm sensor
 
 # We need to create a lights object,
 # so we can control it
 lights = Relay(pin=settings["Relay_Pin"], mode=settings["Relay_Mode"])
-rearm_timer = None
 
 
 def average_light(values):
@@ -28,11 +29,6 @@ def average_light(values):
         return int(sum(values) / len(values))
     values = values[-settings["Sense_Count"]:]
     return int(sum(values) / settings["Sense_Count"])
-
-
-def arm(armed_state=None):
-    global armed
-    armed = armed_state or True
 
 
 @server.route("/lights_on")
@@ -43,15 +39,12 @@ def lights_on(request=None):
     return response
 
 
-@server.route("/lights_off/<timer>")
-def lights_off(request=None, timer=None):
-    global armed, rearm_timer
+@server.route("/lights_off")
+def lights_off(request=None):
+    global attempt_rearm
 
     lights.turn_off()
-    armed = False
-    timer = int(timer) or 0
-    if timer > 0:
-        rearm_timer = Timer(period=timer, mode=Timer.ONE_SHOT, callback=arm)
+    attempt_rearm = settings["Attempt_Rearm"]
 
     response = server.Response(body=str(lights.on), status=200, headers=HEADERS)
     return response
@@ -72,17 +65,36 @@ def status(request):
     return response
 
 
+@server.route("/settings_update", methods=["OPTIONS"])
+def settings_options(request):
+    return server.Response(body="", status=200, headers=HEADERS)
+
+
 @server.route("/settings_update", methods=["POST", "GET"])
 def settings_update(request):
-    global settings
-    settings = request.data
+    update = False
+    global settings, armed
 
-    if "Lights" in settings:
-        lights.set_state(settings.pop("Lights"))
+    if "Lights" in request.data:
+        lights.set_state(request.data["Lights"])
+        if not request.data["Lights"]:
+            global attempt_rearm
+            attempt_rearm = settings["Attempt_Rearm"]
 
-    with open('config.json', 'w') as f:
-        json.dump(settings, f)
-    return status(request)
+    if "Armed" in request.data:
+        armed = request.data["Armed"]
+        settings["Armed"] = armed
+        update = True
+
+    if "Light_Sensitivity" in request.data:
+        settings["Light_Sensitivity"] = request.data["Light_Sensitivity"]
+        update = True
+
+    if update:
+        with open('config.json', 'w') as f:
+            json.dump(settings, f)
+
+    return server.Response(body=json.dumps(settings), status=200, headers=HEADERS)
 
 
 @server.route("/")
@@ -98,44 +110,64 @@ def catchall(request):
 
 
 async def go_serve():
+    # try:
     server.run(host="0.0.0.0", port=80)
+    # except Exception as e:
+    #     print(f"Server crash: {e}")
 
 
 async def monitor():
+    global armed, attempt_rearm
     sensor = ADC(Pin(settings["Sensor_Pin"]))
     reads = []
-    print(sensor, reads)
-    cooldown = 0 # Prevent flickering when crossing the boundary of on to off
-    fudge_factor = 1 + 0.01 * cooldown # To also smooth the curve
+    cooldown = 0  # Prevent flickering when crossing the boundary of on to off
+    fudge_factor = 1 + 0.01 * cooldown  # To also smooth the curve
     while True:
         # do thing
-        if armed:
-            reads.append(sensor.read_u16())
-            current_light = average_light(reads)
-            if cooldown > 0:
-                cooldown -= 1
-            print(current_light)
-            if current_light < settings["Light_Sensitivity"] and lights.on and cooldown == 0:
+        reads.append(sensor.read_u16())
+        current_light = average_light(reads)
+        if len(reads) > settings["Sense_Count"]:
+            reads.pop(0)
+        if cooldown > 0:
+            cooldown -= 1
+        print(f"{current_light}: {reads}")
+        # Now time to do the sensing.
+        # Note about arming -- if attempt_rearm exists, then we are 'armed to the user but inactive'
+        # First, if the light is too bright out, turn lights off, decrement or reset the disarm timer if necessary
+        if current_light < settings["Light_Sensitivity"]:
+            if lights.on and cooldown == 0 and armed:
                 lights.turn_off()
                 cooldown = settings["Cooldown"]
-            elif current_light > settings["Light_Sensitivity"] + fudge_factor and not lights.on and cooldown == 0:
+            elif attempt_rearm and attempt_rearm > 0:
+                # Approaching rearming
+                attempt_rearm -= 1
+            elif not armed and attempt_rearm and attempt_rearm <= 0:
+                armed = True
+                attempt_rearm = None
+        # Next, if the light is too dim, either turn on the lights if no reset timer
+        # Or blank the reset timer if needed
+        elif current_light > settings["Light_Sensitivity"] + fudge_factor:
+            if not lights.on and cooldown == 0 and not attempt_rearm and armed:
                 lights.turn_on()
                 cooldown = settings["Cooldown"]
-        time.sleep_ms(500)
+            elif attempt_rearm and attempt_rearm < settings["Attempt_Rearm"]:
+                attempt_rearm = settings["Attempt_Rearm"]
+        await uasyncio.sleep(1)
 
 
 async def debug_control():
+    """ Simulate sensor response with user input"""
     while True:
         if input("On?") == "y":
             lights.turn_on()
         else:
             lights.turn_off()
-        time.sleep_ms(1500)
+        await uasyncio.sleep(2)
 
 
 async def main():
     """ Set up both the server and the light level monitor"""
-    # uasyncio.create_task(go_serve())
+    uasyncio.create_task(go_serve())
     if settings["Sensor_Pin"] > 0:
         uasyncio.create_task(monitor())
     else:
@@ -145,9 +177,9 @@ async def main():
 
 
 if __name__ == "__main__":
-#     ip = connect_to_wifi(settings["SSID"], settings["Password"])
-# 
-#     print(ip)
+    ip = connect_to_wifi(settings["SSID"], settings["Password"])
+
+    print(ip)
 
     time.sleep(2)
     uasyncio.run(main())

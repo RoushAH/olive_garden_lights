@@ -1,5 +1,6 @@
 import json
 
+
 class Setting:
     def __init__(self, name, this_type, maximum=None, minimum=None):
         self.name = name
@@ -24,6 +25,7 @@ class Setting:
     def __str__(self):
         return f"{self.name}: {str(self.value)}"
 
+
 settings = [
     Setting("SSID", str),
     Setting("Password", str),
@@ -36,16 +38,16 @@ settings = [
     Setting("Armed", bool),
     Setting("Sense_Count", int, 100, 0),
     Setting("Cooldown", int, 100, 0),
+    Setting("Rearm_Timer", int, 60 * 60 * 6, 0)
 ]
 
 for setting in settings:
     val = input(f"Enter value for {setting.name}: ")
-    if not(setting.set_value(val)):
+    if not (setting.set_value(val)):
         val = input(f"Enter value for {setting.name}: ")
 
-setting_vals = {x.name:x.value for x in settings}
+setting_vals = {x.name: x.value for x in settings}
 setting_vals["Lights"] = False
 print(json.dumps(setting_vals, indent=3))
 with open("config.json", "w") as f:
     json.dump(setting_vals, f, indent=3)
-
