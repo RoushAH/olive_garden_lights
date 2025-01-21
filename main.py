@@ -110,10 +110,10 @@ def catchall(request):
 
 
 async def go_serve():
-    # try:
-    server.run(host="0.0.0.0", port=80)
-    # except Exception as e:
-    #     print(f"Server crash: {e}")
+    try:
+        server.run(host="0.0.0.0", port=80)
+    except Exception as e:
+        print(f"Server crash: {e}")
 
 
 async def monitor():
@@ -177,10 +177,19 @@ async def main():
 
 
 if __name__ == "__main__":
-    ip = connect_to_wifi(settings["SSID"], settings["Password"])
+    try:
+        ip = connect_to_wifi(settings["SSID"], settings["Password"])
 
-    print(ip)
+        print(ip)
 
-    time.sleep(2)
-    uasyncio.run(main())
+        time.sleep(2)
+        uasyncio.run(main())
+
+    except KeyboardInterrupt:
+        print("Shutting down")
+    except Exception as ex:
+        print(f"Other exception: {ex}")
+
+    finally:
+        lights.turn_off()
     # server.run(host="0.0.0.0", port=80)
