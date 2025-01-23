@@ -44,7 +44,7 @@ def lights_off(request=None):
     global attempt_rearm
 
     lights.turn_off()
-    attempt_rearm = settings["Attempt_Rearm"]
+    attempt_rearm = settings["Rearm_Timer"]
 
     response = server.Response(body=str(lights.on), status=200, headers=HEADERS)
     return response
@@ -73,13 +73,13 @@ def settings_options(request):
 @server.route("/settings_update", methods=["POST", "GET"])
 def settings_update(request):
     update = False
-    global settings, armed
+    global settings, armed, attempt_rearm
 
     if "Lights" in request.data:
         lights.set_state(request.data["Lights"])
         if not request.data["Lights"]:
             global attempt_rearm
-            attempt_rearm = settings["Attempt_Rearm"]
+            attempt_rearm = settings["Rearm_Timer"]
 
     if "Armed" in request.data:
         armed = request.data["Armed"]
@@ -130,7 +130,7 @@ async def monitor():
             reads.pop(0)
         if cooldown > 0:
             cooldown -= 1
-        print(f"{current_light}: {reads}")
+        print(f"{current_light} Rearm {attempt_rearm}")
         # Now time to do the sensing.
         # Note about arming -- if attempt_rearm exists, then we are 'armed to the user but inactive'
         # First, if the light is too bright out, turn lights off, decrement or reset the disarm timer if necessary
@@ -150,8 +150,8 @@ async def monitor():
             if not lights.on and cooldown == 0 and not attempt_rearm and armed:
                 lights.turn_on()
                 cooldown = settings["Cooldown"]
-            elif attempt_rearm and attempt_rearm < settings["Attempt_Rearm"]:
-                attempt_rearm = settings["Attempt_Rearm"]
+            elif attempt_rearm and attempt_rearm < settings["Rearm_Timer"]:
+                attempt_rearm = settings["Rearm_Timer"]
         await uasyncio.sleep(1)
 
 
