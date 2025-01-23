@@ -6,8 +6,8 @@ settings = json.load(open('config.json'))
 sensor = ADC(Pin(settings["Sensor_Pin"]))
 file = "records.csv"
 
-with open(file, 'w') as csvfile:
-    csvfile.write("date, light\n")
+# with open(file, 'w') as csvfile:
+#     csvfile.write("date, light\n")
 
 
 def do_job(stime):
@@ -17,16 +17,17 @@ def do_job(stime):
     print(f"{tstring}: \t{light}")
 
     with open(file, 'a') as c:
-        c.write("{},{}\n".format(tstring, light))
+        c.write("{},\t{}\n".format(tstring, light))
     time.sleep(stime)
 
 if __name__ == "__main__":
     print("Welcome to the historiser\nmeasuring time vs light over HISTORY!!!!")
-    mins = int(input("How many minutes per cycle? "))
-
+#     mins = int(input("How many minutes per cycle? "))
+    mins = 10
     period = mins * 60
     # period = mins
 
     print("Starting measurements...")
-    do_job(period)
+    while True :
+        do_job(period)
     # tim = Timer(period=period, mode=Timer.PERIODIC, callback=do_job)
