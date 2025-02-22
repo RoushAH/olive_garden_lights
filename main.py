@@ -23,6 +23,8 @@ attempt_rearm = None  # timer to track how many seconds of 'daylight' to rearm s
 # so we can control it
 lights = Relay(pin=settings["Relay_Pin"], mode=settings["Relay_Mode"])
 
+reads = []
+
 
 def average_light(values):
     if len(values) < settings["Sense_Count"]:
@@ -60,6 +62,7 @@ def ruok(request):
 def status(request):
     out = settings.copy()
     out["Lights"] = lights.on
+    out["Sensor_Value"] = reads[-1]
 
     response = server.Response(body=json.dumps(out), status=200, headers=HEADERS)
     return response
@@ -89,6 +92,9 @@ def settings_update(request):
     if "Light_Sensitivity" in request.data:
         settings["Light_Sensitivity"] = request.data["Light_Sensitivity"]
         update = True
+    
+#     if "Write_Me" in request.data:
+#         update = True
 
     if update:
         with open('config.json', 'w') as f:
@@ -102,12 +108,32 @@ def index(request):
     response = server.Response(body="<h1>Hello, World!</h1>", status=200, headers=HEADERS)
     return response
 
+# @server.route("/data")
+# def data(request):
+#     print("Tryint")
+#     try:
+#         print("got here")
+#         with open("data.txt", "r") as f:
+#             data = f.read()
+#     except Exception as e:
+#         data = str(e)
+#     print(data)
+#     response = server.Response(body = str(data), status=200, headers=HEADERS)
+#     return response
+
 
 @server.catchall()
 def catchall(request):
     response = server.Response(body="You've found the server!", status=404, headers=HEADERS)
     return response
 
+# def write_data(datum):
+#     try:
+#         with open('data.txt', 'a') as f:
+#             output = f"{datum};\n"
+#             f.write(output)
+#     except Exception as e:
+#         print(f"sad trombone\n{e}")
 
 async def go_serve():
     # try:
@@ -117,11 +143,11 @@ async def go_serve():
 
 
 async def monitor():
-    global armed, attempt_rearm
+    global armed, attempt_rearm, reads
     sensor = ADC(Pin(settings["Sensor_Pin"]))
-    reads = []
     cooldown = 0  # Prevent flickering when crossing the boundary of on to off
     fudge_factor = 1 + 0.01 * cooldown  # To also smooth the curve
+    count = 0
     while True:
         # do thing
         reads.append(sensor.read_u16())
@@ -130,7 +156,7 @@ async def monitor():
             reads.pop(0)
         if cooldown > 0:
             cooldown -= 1
-        print(f"{current_light}: {reads}")
+#         print(f"{current_light}: {reads}")
         # Now time to do the sensing.
         # Note about arming -- if attempt_rearm exists, then we are 'armed to the user but inactive'
         # First, if the light is too bright out, turn lights off, decrement or reset the disarm timer if necessary
@@ -152,6 +178,10 @@ async def monitor():
                 cooldown = settings["Cooldown"]
             elif attempt_rearm and attempt_rearm < settings["Attempt_Rearm"]:
                 attempt_rearm = settings["Attempt_Rearm"]
+#         count += 1
+#         if count >= settings["write_time"]:
+#             write_data(current_light)
+#             count = 0
         await uasyncio.sleep(1)
 
 
