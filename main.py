@@ -62,7 +62,8 @@ def ruok(request):
 def status(request):
     out = settings.copy()
     out["Lights"] = lights.on
-    out["Sensor_Value"] = reads[-1]
+    out["Sensor_Values"] = reads
+    out["Current_Rearm_Timer"] = attempt_rearm
 
     response = server.Response(body=json.dumps(out), status=200, headers=HEADERS)
     return response
@@ -156,7 +157,7 @@ async def monitor():
             reads.pop(0)
         if cooldown > 0:
             cooldown -= 1
-#         print(f"{current_light}: {reads}")
+        print(f"{current_light}: {reads}")
         # Now time to do the sensing.
         # Note about arming -- if attempt_rearm exists, then we are 'armed to the user but inactive'
         # First, if the light is too bright out, turn lights off, decrement or reset the disarm timer if necessary
