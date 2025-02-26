@@ -17,9 +17,9 @@ class Relay(object):
     def react(self):
         if self.hardware:
             if self.on:
-                self.hardware.on()
+                self.hardware.off()
             else:
-                self.hardware.off()       
+                self.hardware.on()       
         print(f"Relay on = {self.on}")
 
     def set_state(self, alive=True):
