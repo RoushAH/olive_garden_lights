@@ -132,13 +132,20 @@ class LightController:
             self.save_settings()
             return self.make_response(self.settings)
 
-        @server.route("/adjust")
+        @server.route("/adjust", methods=["OPTIONS"])
+        def adjust_options(request):
+            return self.make_response("")
+
+        @server.route("/adjust", methods=["GET"])
         def adjust(request):
             param = request.query.get("param")
             value = request.query.get("value")
 
+            if not param or not value:
+                return self.make_response(f"Please provide param from {[i for i in self.settings]} and value")
+
             if param not in self.settings:
-                return self.make_response({"error": "Invalid parameter"}, status=400)
+                return self.make_response(f"Invalid parameter, not in {[i for i in self.settings]}", status=400)
 
             try:
                 self.settings[param] = int(value) if value.isdigit() else value
